@@ -1,7 +1,7 @@
 {
   "experiment_name": "Experiment_1",
   "palette_file": "palettes.json",
-  "gas_endpoint": "https://script.google.com/macros/s/AKfycbyq7vgnUcqs5FKGzCn6WgHWmVkqaVj9S4WDJyk3Krg8W2R4uLzKMmLk03LOKEujCSL32A/exec",
+  "gas_endpoint": "https://script.google.com/macros/s/AKfycbxBZ4BMiXvrW5Y8oTDbIyF_NIL9x8xMmKw8xqJeuaS_QtnevoPaYjoOLXd8zqDXgODHQQ/exec",
 
   "color_conditions": ["lightness", "hue_narrow", "hue_wide"],
   "target_counts": [4, 7],
