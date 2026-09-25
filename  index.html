@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>【本実験】操作インターフェースにおけるアラート表示の多段階色彩設計が行動系列生成に及ぼす影響の分析</title>
+<style>
+  :root { --cell-size: 70px; --gap: 14px; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    background: #777; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none;
+  }
+  #app { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+
+  .screen {
+    width: 760px; max-width: 90vw; padding: 32px;
+    text-align: left; line-height: 1.8; box-sizing: border-box;
+  }
+  .screen h1 { font-size: 22px; margin-bottom: 16px; border-bottom: 2px solid #666; padding-bottom: 8px; }
+  .screen h2 { font-size: 18px; margin-top: 16px; }
+  .screen p  { font-size: 14px; margin: 8px 0; }
+  .screen ul, .screen ol { font-size: 14px; margin: 8px 0; padding-left: 20px; }
+
+  button {
+    margin-top: 20px; padding: 12px 28px; font-size: 16px;
+    border: none; border-radius: 6px; background: #2b7de9; color: #fff; cursor: pointer;
+  }
+  button:hover { background: #1f63c4; }
+  #fixation { font-size: 48px; }
+
+  #taskContainer {
+    width: 760px; max-width: 90vw;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  #conditionBanner {
+    font-size: 16px; font-weight: bold; padding: 6px 16px;
+    border-radius: 20px; margin-bottom: 16px; display: inline-block;
+  }
+  .banner-timelimit   { background: rgba(255,85,85,0.25); border: 1px solid #ff5555; color: #ff8888; }
+  .banner-notimelimit { background: rgba(43,125,233,0.25); border: 1px solid #2b7de9; color: #88bbff; }
+
+  #gridArea {
+    display: grid;
+    grid-template-columns: repeat(5, var(--cell-size));
+    grid-template-rows:    repeat(5, var(--cell-size));
+    gap: var(--gap); padding: 24px;
+    border: 2px solid rgba(255,255,255,0.5); border-radius: 8px;
+  }
+  .cell { width: var(--cell-size); height: var(--cell-size); border-radius: 4px; cursor: pointer; }
+  #timerBar { position: fixed; top: 0; left: 0; height: 6px; background: #ff5555; width: 0%; }
+  #progress { position: fixed; bottom: 16px; right: 20px; font-size: 13px; opacity: 0.8; }
+  #consentBox { max-height: 28vh; overflow-y: auto; background: rgba(0,0,0,0.25); padding: 16px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; }
+  label.check { display: block; margin-top: 12px; font-size: 14px; }
+  .input-field { margin-left: 8px; padding: 6px 8px; font-size: 14px; border-radius: 4px; border: 1px solid #777; background: #222; color: #fff; }
+  textarea { width: 100%; padding: 8px; font-size: 14px; border-radius: 4px; border: 1px solid #777; background: #222; color: #fff; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="timerBar"></div>
+<div id="progress"></div>
+<div id="app"><p style="color:#aaa;">読み込み中...</p></div>
+
+<script>
+/* ==============================================================
+   設定ファイル読み込み
+   ============================================================== */
+// config.json と palettes.json を fetch して使う。
+// 同一ディレクトリに両ファイルを置いて、ローカルサーバーまたはHTTPSで配信してください。
+// （file:// では fetch がブロックされるため python -m http.server などを使用）
+
+async function loadConfig() {
+  const [cfgRes, palRes] = await Promise.all([
+    fetch("config.json"),
+    fetch("palettes.json"),
+  ]);
+  if (!cfgRes.ok) throw new Error("config.json が読み込めません");
+  if (!palRes.ok) throw new Error("palettes.json が読み込めません");
+  return { cfg: await cfgRes.json(), palettes: await palRes.json() };
+}
+
+/* ==============================================================
+   Google Apps Script 送信エンドポイント
+   ============================================================== */
+const GOOGLE_SHEET_ENDPOINT = "（本実験用GASのURLをここに貼り付けてください）";
+
+/* ==============================================================
+   グローバル変数
+   ============================================================== */
+let CFG = null;
+let PALETTES = null;
+let BG_HEX = "#777777";       // backgrounds.json の値（または固定値）
+let DISTRACTOR_HEX = "#999999";
+
+const results = [];
+let trialPlan = [];
+let currentTrialIndex = 0;
+let participantId = "";
+let screeningData = {};
+
+const app       = document.getElementById("app");
+const timerBar  = document.getElementById("timerBar");
+const progressEl = document.getElementById("progress");
+
+/* ==============================================================
+   ユーティリティ
+   ============================================================== */
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function getNextParticipantId() {
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return "P" + Date.now().toString(36).toUpperCase() + rand;
+}
+
+// palettes.json のキー名: "<condition>_<targetCount>"
+function getPaletteKey(colorCondition, targetCount) {
+  // colorCondition: "lightness" | "hue_narrow" | "hue_wide"
+  return colorCondition + "_" + targetCount;
+}
+
+/* ==============================================================
+   試行計画生成
+   ============================================================== */
+function buildFullPlan() {
+  const plan = [];
+
+  // 練習試行（config.practice_trials で定義）
+  for (const pt of CFG.practice_trials) {
+    plan.push({
+      isPractice: true,
+      colorCondition: pt.color_condition,
+      timeLimitOn: pt.time_limit,
+      targetCount: pt.target_count,
+    });
+  }
+
+  const REP = CFG.reps_per_cell;
+  const colors = CFG.color_conditions;
+  const counts = CFG.target_counts;
+
+  // ブロック1：時間制限あり
+  let block1 = [];
+  for (let i = 0; i < REP; i++) {
+    for (const tc of counts) {
+      for (const cc of colors) {
+        block1.push({ isPractice: false, colorCondition: cc, timeLimitOn: true,  targetCount: tc });
+      }
+    }
+  }
+  plan.push(...shuffle(block1));
+
+  // ブロック2：時間制限なし
+  let block2 = [];
+  for (let i = 0; i < REP; i++) {
+    for (const tc of counts) {
+      for (const cc of colors) {
+        block2.push({ isPractice: false, colorCondition: cc, timeLimitOn: false, targetCount: tc });
+      }
+    }
+  }
+  plan.push(...shuffle(block2));
+
+  return plan;
+}
+
+/* ==============================================================
+   画面：同意・属性入力
+   ============================================================== */
+function showConsentScreen() {
+  app.innerHTML = `
+    <div class="screen" style="max-height:90vh; overflow-y:auto;">
+      <h1>【本実験】操作インターフェースにおけるアラート表示の多段階色彩設計が行動系列生成に及ぼす影響の分析</h1>
+      <div id="consentBox">
+        <p><b>【本実験の目的】</b><br>
+        操作インターフェースにおける多段階色彩設計が、人間の行動系列生成プロセスに及ぼす影響を調べる実験です。画面上に表示される複数の色付きマスを、重要と感じる順に選択する課題を行っていただきます。</p>
+
+        <p><b>【所要時間】</b> 約 15 〜 20 分</p>
+
+        <p><b>【参加必須環境】</b></p>
+        <ul>
+          <li><b>PC環境での参加が必須です。</b>（マウスまたはトラックパッドを使用してください）</li>
+          <li>ナイトモードやブルーライトカット機能（Night Shift等）はオフにしてください。</li>
+          <li>ブラウザを最大化/全画面表示にしてください。</li>
+          <li>実験中は他のウィンドウへの切り替えを避けてください。</li>
+        </ul>
+
+        <p><b>【データの取り扱い】</b><br>取得されたデータは研究および学術的な統計分析のみに使用され、個人が特定されることはありません。実験中の操作（クリックした順番や反応時間など）を記録します。</p>
+
+        <p><b>【実験実施者・連絡先】</b><br>
+        実施責任者：早稲田大学人間科学部 松居研究室 羽賀琴美<br>
+        連絡先：toiro5103@akane.waseda.jp</p>
+      </div>
+
+      <div style="background:rgba(255,255,255,0.05); padding:16px; border-radius:6px; margin-bottom:16px;">
+        <h2 style="font-size:16px; margin:0 0 12px 0;">基本属性・環境情報の入力</h2>
+
+        <label class="check">参加者ID（担当者から指定された番号）：
+          <input type="text" id="pidInput" class="input-field" style="width:120px;" placeholder="例: 01">
+        </label>
+
+        <label class="check">年齢：
+          <input type="number" id="ageInput" class="input-field" style="width:80px;" min="18" max="99" placeholder="例: 22"> 歳
+        </label>
+
+        <label class="check">性別：
+          <select id="genderInput" class="input-field">
+            <option value="">選択してください</option>
+            <option value="male">男性</option>
+            <option value="female">女性</option>
+            <option value="other">その他</option>
+            <option value="no_answer">回答しない</option>
+          </select>
+        </label>
+
+        <label class="check">ポインティングデバイス：
+          <select id="deviceInput" class="input-field">
+            <option value="pc_mouse">PC（マウス操作）</option>
+            <option value="pc_trackpad">PC（トラックパッド操作）</option>
+          </select>
+        </label>
+
+        <label class="check">使用PC機種・モニター情報：<br>
+          <input type="text" id="deviceSpecInput" class="input-field" style="width:90%; margin-top:4px;" placeholder="例: MacBook Air 13インチ, 24インチ外付けモニタ等">
+        </label>
+
+        <label class="check">視力について：
+          <select id="visionInput" class="input-field">
+            <option value="corrected_normal">矯正視力を含め問題なし（メガネ/コンタクト着用含む）</option>
+            <option value="uncorrected_now">普段は矯正しているが、今は着用していない</option>
+            <option value="uncorrected_problem">裸眼視力に問題があり、矯正していない</option>
+          </select>
+        </label>
+
+        <label class="check">色の見え方（色覚特性）：
+          <select id="colorVisionInput" class="input-field">
+            <option value="none">特に指摘されたことはない（一般的な色覚）</option>
+            <option value="diagnosed">色覚特性について指摘・診断を受けたことがある</option>
+            <option value="unsure">わからない</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="check" style="margin-top:16px;">
+        <input type="checkbox" id="agreeCheck" style="margin-right:8px;">上記の内容および動作環境を確認し、実験に参加します
+      </label>
+      <button id="consentBtn">課題説明へ進む</button>
+    </div>`;
+
+  document.getElementById("consentBtn").onclick = () => {
+    const pid = document.getElementById("pidInput").value.trim();
+    const age = document.getElementById("ageInput").value;
+    const gender = document.getElementById("genderInput").value;
+    if (!age || !gender) { alert("年齢と性別を入力してください。"); return; }
+    if (!document.getElementById("agreeCheck").checked) { alert("参加同意のチェックを入れてください。"); return; }
+
+    participantId = pid ? "P" + pid : getNextParticipantId();
+    screeningData = {
+      participant: participantId, age, gender,
+      device_type: document.getElementById("deviceInput").value,
+      device_spec: document.getElementById("deviceSpecInput").value,
+      vision: document.getElementById("visionInput").value,
+      color_vision: document.getElementById("colorVisionInput").value,
+      screen_width: window.screen.width, screen_height: window.screen.height,
+      viewport_width: window.innerWidth, viewport_height: window.innerHeight,
+      user_agent: navigator.userAgent,
+    };
+    showInstructions();
+  };
+}
+
+/* ==============================================================
+   画面：課題説明
+   ============================================================== */
+function showInstructions() {
+  const totalBlock = CFG.reps_per_cell * CFG.color_conditions.length * CFG.target_counts.length;
+  app.innerHTML = `
+    <div class="screen">
+      <h1>課題の説明</h1>
+      <p>画面中央に5×5のマス目が表示されます。そのうち <b>4個または7個</b> に色のついたマスが表示されます（試行ごとに異なります）。</p>
+
+      <div style="background:rgba(43,125,233,0.15); border-left:4px solid #2b7de9; padding:12px 16px; margin:16px 0; border-radius:4px;">
+        <p style="margin:0; font-weight:bold; color:#88bbff;">【重要：操作ルール】</p>
+        <p style="margin:4px 0 0 0;">
+          あなたが<b>「重要そうだ」「先に対処すべきだ」と直感的に感じた順に、表示されたカラーマスをすべて選択してください。</b><br>
+          途中でやめず、すべてのカラーマスをクリックしてください。クリックしたマスは背景色と同じグレーに変わります。
+        </p>
+      </div>
+
+      <h2>試行の流れ</h2>
+      <ol>
+        <li><b>練習試行（${CFG.practice_trials.length}回）</b>：操作確認のための練習</li>
+        <li><b>本番1（${totalBlock}試行）</b>：<b>【制限時間あり（${CFG.time_limit_sec}秒）】</b><br>
+          画面上部に赤いタイマーバーが表示されます。時間内に直感で素早く選んでください。時間を超過した場合、次の試行へ切り替わります。</li>
+        <li><b>本番2（${totalBlock}試行）</b>：<b>【制限時間なし】</b><br>
+          時間制限はありません。直感で選んでください。</li>
+      </ol>
+      <p style="font-size:13px; color:#ccc;">※試行ごとに色の組み合わせとカラーマスの個数が変化します。</p>
+      <button id="startPracticeBtn">まずは練習を開始する</button>
+    </div>`;
+
+  document.getElementById("startPracticeBtn").onclick = () => {
+    trialPlan = buildFullPlan();
+    currentTrialIndex = 0;
+    runNextTrial();
+  };
+}
+
+/* ==============================================================
+   試行ループ
+   ============================================================== */
+function runNextTrial() {
+  timerBar.style.width = "0%";
+  if (currentTrialIndex >= trialPlan.length) return showEnd();
+
+  const cond = trialPlan[currentTrialIndex];
+  const label = cond.isPractice ? "【練習】" : "【本番】";
+  progressEl.textContent = `${label} 試行 ${currentTrialIndex + 1} / ${trialPlan.length}`;
+
+  document.body.style.background = BG_HEX;
+  app.innerHTML = `<div id="fixation">+</div>`;
+  setTimeout(() => runTrial(cond), CFG.fixation_sec * 1000);
+}
+
+function runTrial(cond) {
+  const GRID = CFG.grid_size;
+  const n = GRID * GRID;
+  const tc = cond.targetCount;
+
+  // グリッドインデックスをシャッフルしてターゲット位置を決める
+  const indices = [...Array(n).keys()];
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  const targetIndices = indices.slice(0, tc);
+  const targetSet = new Set(targetIndices);
+
+  // パレット取得
+  const key = getPaletteKey(cond.colorCondition, tc);
+  const palette = PALETTES[key];
+  if (!palette) {
+    console.error("パレットが見つかりません:", key);
+    currentTrialIndex++;
+    runNextTrial();
+    return;
+  }
+
+  // ターゲット → パレット色のマッピング（順番にレベルを割り当て）
+  const targetOrderMap = {};
+  targetIndices.forEach((idx, i) => { targetOrderMap[idx] = palette[i]; });
+
+  const bannerClass = cond.timeLimitOn ? "banner-timelimit" : "banner-notimelimit";
+  const bannerText  = cond.timeLimitOn ? "制限時間あり" : "制限時間なし";
+  const practiceNotice = cond.isPractice ? "<span style='font-size:13px; opacity:0.8; margin-left:8px;'>[練習]</span>" : "";
+
+  app.innerHTML = `
+    <div id="taskContainer">
+      <div id="conditionBanner" class="${bannerClass}">${bannerText}${practiceNotice}</div>
+      <div id="gridArea"></div>
+    </div>`;
+
+  const gridArea = document.getElementById("gridArea");
+  const cellEls = [];
+
+  for (let i = 0; i < n; i++) {
+    const div = document.createElement("div");
+    div.className = "cell";
+    const isTarget = targetSet.has(i);
+    div.style.background = isTarget ? targetOrderMap[i].hex : DISTRACTOR_HEX;
+    div.dataset.index = i;
+    div.dataset.active = isTarget ? "1" : "0";
+    gridArea.appendChild(div);
+    cellEls.push(div);
+  }
+
+  const gridX = i => i % GRID;
+  const gridY = i => Math.floor(i / GRID);
+
+  let clickOrder = 0;
+  let lastTime = performance.now();
+  let lastClickPos = null;
+  let finished = false;
+  const trialStart = performance.now();
+
+  function cellCenter(el) {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  function endTrial() {
+    if (finished) return;
+    finished = true;
+    cellEls.forEach(el => el.removeEventListener("click", onClick));
+
+    // タイムアウトした未クリックターゲットを記録
+    if (!cond.isPractice) {
+      targetIndices.forEach(idx => {
+        if (cellEls[idx].dataset.active === "1") {
+          results.push({
+            participant: participantId,
+            trial_num: currentTrialIndex + 1,
+            color_condition: cond.colorCondition,
+            target_count: tc,
+            time_limit_condition: cond.timeLimitOn,
+            click_order: null,
+            grid_x: gridX(idx), grid_y: gridY(idx),
+            color_level: targetOrderMap[idx].level,
+            hex_code: targetOrderMap[idx].hex,
+            rt_ms: null, distance_px: null, timed_out: true,
+          });
+        }
+      });
+    }
+
+    // 練習終了 → 本番1開始案内
+    const practiceEnd = CFG.practice_trials.length - 1;
+    if (currentTrialIndex === practiceEnd) {
+      const totalBlock = CFG.reps_per_cell * CFG.color_conditions.length * CFG.target_counts.length;
+      setTimeout(() => {
+        document.body.style.background = "#444";
+        timerBar.style.width = "0%";
+        app.innerHTML = `
+          <div class="screen">
+            <h1>練習が終了しました</h1>
+            <p>ここから本番が始まります。</p>
+            <div style="background:rgba(255,85,85,0.15); border-left:4px solid #ff5555; padding:12px 16px; margin:20px 0; border-radius:4px;">
+              <h2 style="margin:0 0 6px 0; color:#ff8888; font-size:17px;">【本番1：制限時間あり（${totalBlock}試行）】</h2>
+              <p style="margin:0;">画面上部に赤いタイマーバーが表示されます。<br>重要だと感じる順に、<b>時間内にカラーマスをすべて</b>素早く選んでください。（試行ごとに4個または7個）</p>
+            </div>
+            <button id="goBlock1Btn">本番1を開始する</button>
+          </div>`;
+        document.getElementById("goBlock1Btn").onclick = () => { currentTrialIndex++; runNextTrial(); };
+      }, 500);
+      return;
+    }
+
+    // ブロック1終了 → 本番2開始案内
+    const totalBlock = CFG.reps_per_cell * CFG.color_conditions.length * CFG.target_counts.length;
+    const block1End = CFG.practice_trials.length + totalBlock - 1;
+    if (currentTrialIndex === block1End) {
+      setTimeout(() => {
+        document.body.style.background = "#444";
+        timerBar.style.width = "0%";
+        app.innerHTML = `
+          <div class="screen">
+            <h1>本番ブロック1が終了しました</h1>
+            <div style="background:rgba(43,125,233,0.15); border-left:4px solid #2b7de9; padding:12px 16px; margin:20px 0; border-radius:4px;">
+              <h2 style="margin:0 0 6px 0; color:#88bbff; font-size:17px;">【本番2：制限時間なし（${totalBlock}試行）】</h2>
+              <p style="margin:0;">ここからは時間制限がありません。重要だと感じる順に<b>カラーマスをすべて</b>選んでください。（試行ごとに4個または7個）</p>
+            </div>
+            <button id="goBlock2Btn">本番2を開始する</button>
+          </div>`;
+        document.getElementById("goBlock2Btn").onclick = () => { currentTrialIndex++; runNextTrial(); };
+      }, 500);
+      return;
+    }
+
+    setTimeout(() => { currentTrialIndex++; runNextTrial(); }, CFG.post_blank_sec * 1000);
+  }
+
+  function onClick(e) {
+    const el = e.currentTarget;
+    if (el.dataset.active !== "1") return;
+    const idx = Number(el.dataset.index);
+    const now = performance.now();
+    const rt = Math.round(now - lastTime);
+    const pos = cellCenter(el);
+    let dist = null;
+    if (lastClickPos) {
+      dist = Math.round(Math.hypot(pos.x - lastClickPos.x, pos.y - lastClickPos.y) * 100) / 100;
+    }
+    clickOrder++;
+
+    if (!cond.isPractice) {
+      results.push({
+        participant: participantId,
+        trial_num: currentTrialIndex + 1,
+        color_condition: cond.colorCondition,
+        target_count: tc,
+        time_limit_condition: cond.timeLimitOn,
+        click_order: clickOrder,
+        grid_x: gridX(idx), grid_y: gridY(idx),
+        color_level: targetOrderMap[idx].level,
+        hex_code: targetOrderMap[idx].hex,
+        rt_ms: rt, distance_px: dist, timed_out: false,
+      });
+    }
+
+    el.style.background = DISTRACTOR_HEX;
+    el.dataset.active = "0";
+    lastTime = now;
+    lastClickPos = pos;
+    if (clickOrder >= tc) endTrial();
+  }
+
+  cellEls.forEach(el => el.addEventListener("click", onClick));
+
+  if (cond.timeLimitOn) {
+    const limitMs = CFG.time_limit_sec * 1000;
+    const tick = () => {
+      if (finished) return;
+      const elapsed = performance.now() - trialStart;
+      timerBar.style.width = Math.max(0, 100 - (elapsed / limitMs) * 100) + "%";
+      if (elapsed >= limitMs) { endTrial(); return; }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+}
+
+/* ==============================================================
+   終了 → アンケート
+   ============================================================== */
+function showEnd() {
+  document.body.style.background = "#444";
+  timerBar.style.width = "0%";
+  progressEl.textContent = "";
+  showQuestionnaire();
+}
+
+function showQuestionnaire() {
+  app.innerHTML = `
+    <div class="screen" style="max-height:85vh; overflow-y:auto;">
+      <h1>事後アンケート</h1>
+      <p>実験のご協力ありがとうございました。設計改善のため率直なご意見をお願いいたします。</p>
+
+      <p style="margin-top:16px;"><b>1. 色の選び方・判断基準</b><br>
+        <span style="font-size:13px; color:#ccc;">（例：一番濃い色から選んだ、特定の色相を優先した、位置で選んだ 等）</span></p>
+      <textarea id="qStrategy" rows="3"></textarea>
+
+      <p style="margin-top:16px;"><b>2. カラーマスの個数（4個・7個）は、選び方に影響しましたか？</b></p>
+      <textarea id="qCountEffect" rows="2" placeholder="「個数が少ないと迷わなかった」「7個だと最後の方は適当になった」等、気づいたことがあれば"></textarea>
+
+      <p style="margin-top:16px;"><b>3. 実験手順・画面表示で分かりにくかった点や不具合</b><br>
+        <span style="font-size:13px; color:#ccc;">（例：説明が分かりづらい、色の識別が難しかった、テンポが速い/遅い 等）</span></p>
+      <textarea id="qImprovement" rows="3" placeholder="改善点等があればご自由にご記入ください"></textarea>
+
+      <button id="submitQBtn">回答を送信して完了する</button>
+    </div>`;
+
+  document.getElementById("submitQBtn").onclick = function () {
+    const btn = document.getElementById("submitQBtn");
+    btn.disabled = true;
+    btn.textContent = "データを送信中...";
+
+    const surveyData = {
+      participant: participantId || "unknown",
+      age: screeningData.age || "",
+      gender: screeningData.gender || "",
+      device_type: screeningData.device_type || "",
+      device_spec: screeningData.device_spec || "",
+      vision: screeningData.vision || "",
+      color_vision: screeningData.color_vision || "",
+      strategy: document.getElementById("qStrategy")?.value || "",
+      count_effect: document.getElementById("qCountEffect")?.value || "",
+      improvement_feedback: document.getElementById("qImprovement")?.value || "",
+      screen_width: window.screen.width, screen_height: window.screen.height,
+      viewport_width: window.innerWidth, viewport_height: window.innerHeight,
+      user_agent: navigator.userAgent,
+    };
+
+    const payload = { trials: results, survey: surveyData };
+
+    try {
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = GOOGLE_SHEET_ENDPOINT;
+      form.target = "hidden_iframe";
+      const input = document.createElement("input");
+      input.type = "hidden"; input.name = "data";
+      input.value = JSON.stringify(payload);
+      form.appendChild(input);
+
+      let iframe = document.getElementById("hidden_iframe");
+      if (!iframe) {
+        iframe = document.createElement("iframe");
+        iframe.id = "hidden_iframe"; iframe.name = "hidden_iframe";
+        iframe.style.display = "none";
+        document.body.appendChild(iframe);
+      }
+      document.body.appendChild(form);
+      form.submit();
+    } catch (err) {
+      console.warn("送信エラー:", err);
+    }
+
+    setTimeout(showThankYouScreen, 5000);
+  };
+}
+
+function showThankYouScreen() {
+  const header = "participant,trial_num,color_condition,target_count,time_limit_condition,click_order,grid_x,grid_y,color_level,hex_code,rt_ms,distance_px,timed_out";
+  const csvLines = [header];
+  results.forEach(r => csvLines.push(Object.values(r).join(",")));
+  const csvBlob = new Blob([csvLines.join("\n")], { type: "text/csv" });
+  const csvUrl = URL.createObjectURL(csvBlob);
+
+  app.innerHTML = `
+    <div class="screen" style="text-align:center;">
+      <h1 style="border:none;">実験終了</h1>
+      <p style="font-size:16px; margin:24px 0;">ご協力ありがとうございました！</p>
+      <p style="color:#aaa; font-size:12px;">
+        （バックアップとして、可能であれば下のボタンからもダウンロードして担当者にお送りください）
+      </p>
+      <a href="${csvUrl}" download="backup_${participantId}.csv"><button>バックアップをダウンロード</button></a>
+    </div>`;
+}
+
+/* ==============================================================
+   起動
+   ============================================================== */
+loadConfig()
+  .then(({ cfg, palettes }) => {
+    CFG = cfg;
+    PALETTES = palettes;
+    // 背景色・ディストラクタ色の計算（greyの中間明度）
+    // ここでは固定値。palette_generator.py が出力する backgrounds.json を参照してもよい
+    BG_HEX = "#777777";          // L*=50 グレー
+    DISTRACTOR_HEX = "#999999";  // やや明るめのグレー（L*≈60相当）
+    showConsentScreen();
+  })
+  .catch(err => {
+    app.innerHTML = `
+      <div class="screen">
+        <h1 style="color:#ff8888;">設定ファイルの読み込みに失敗しました</h1>
+        <p>${err.message}</p>
+        <p style="font-size:13px; color:#ccc;">
+          同じフォルダに <b>config.json</b> と <b>palettes.json</b> を置き、<br>
+          ローカルサーバー（<code>python -m http.server</code>）経由でアクセスしてください。<br>
+          file:// では fetch がブロックされます。
+        </p>
+      </div>`;
+  });
+</script>
+</body>
+</html>
