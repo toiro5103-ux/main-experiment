@@ -82,15 +82,11 @@ async function loadConfig() {
 }
 
 /* ==============================================================
-   Google Apps Script 送信エンドポイント
-   ============================================================== */
-const GOOGLE_SHEET_ENDPOINT = "（本実験用GASのURLをここに貼り付けてください）";
-
-/* ==============================================================
    グローバル変数
    ============================================================== */
 let CFG = null;
 let PALETTES = null;
+let GOOGLE_SHEET_ENDPOINT = "";
 let BG_HEX = "#777777";       // backgrounds.json の値（または固定値）
 let DISTRACTOR_HEX = "#999999";
 
@@ -621,8 +617,7 @@ loadConfig()
   .then(({ cfg, palettes }) => {
     CFG = cfg;
     PALETTES = palettes;
-    // 背景色・ディストラクタ色の計算（greyの中間明度）
-    // ここでは固定値。palette_generator.py が出力する backgrounds.json を参照してもよい
+    GOOGLE_SHEET_ENDPOINT = cfg.gas_endpoint || "";
     BG_HEX = "#777777";          // L*=50 グレー
     DISTRACTOR_HEX = "#999999";  // やや明るめのグレー（L*≈60相当）
     showConsentScreen();
