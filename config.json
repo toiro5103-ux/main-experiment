@@ -1,0 +1,35 @@
+{
+  "experiment_name": "Experiment_1",
+  "palette_file": "palettes.json",
+  "gas_endpoint": "https://script.google.com/macros/s/AKfycbyq7vgnUcqs5FKGzCn6WgHWmVkqaVj9S4WDJyk3Krg8W2R4uLzKMmLk03LOKEujCSL32A/exec",
+
+  "color_conditions": ["lightness", "hue_narrow", "hue_wide"],
+  "target_counts": [4, 7],
+  "time_limit_conditions": [true, false],
+
+  "reps_per_cell": 3,
+
+  "time_limit_sec": 5.0,
+  "fixation_sec": 1.5,
+  "post_blank_sec": 0.8,
+
+  "grid_size": 5,
+  "background_L": 50,
+
+  "practice_trials": [
+    { "color_condition": "lightness",  "target_count": 7, "time_limit": true  },
+    { "color_condition": "lightness",  "target_count": 4, "time_limit": false },
+    { "color_condition": "hue_narrow", "target_count": 7, "time_limit": true  },
+    { "color_condition": "hue_wide",   "target_count": 4, "time_limit": false }
+  ],
+
+  "block_order": "time_limit_first",
+
+  "data_dir": "data",
+
+  "_notes": {
+    "reps_per_cell": "3色条件 × 2カテゴリ数 × 2時間制約 × 3回 = 36本試行",
+    "block_order": "時間制約あり→なし固定（論文§5.3.5の設計判断に基づく）",
+    "practice_trials": "4試行固定（論文§5.3.5より）"
+  }
+}
