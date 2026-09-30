@@ -67,10 +67,6 @@
 /* ==============================================================
    設定ファイル読み込み
    ============================================================== */
-// config.json と palettes.json を fetch して使う。
-// 同一ディレクトリに両ファイルを置いて、ローカルサーバーまたはHTTPSで配信してください。
-// （file:// では fetch がブロックされるため python -m http.server などを使用）
-
 async function loadConfig() {
   const [cfgRes, palRes] = await Promise.all([
     fetch("config.json"),
@@ -86,8 +82,9 @@ async function loadConfig() {
    ============================================================== */
 let CFG = null;
 let PALETTES = null;
+// 最新のWebアプリURL
 let GOOGLE_SHEET_ENDPOINT = "https://script.google.com/macros/s/AKfycbxBZ4BMiXvrW5Y8oTDbIyF_NIL9x8xMmKw8xqJeuaS_QtnevoPaYjoOLXd8zqDXgODHQQ/exec";
-let BG_HEX = "#777777";       // backgrounds.json の値（または固定値）
+let BG_HEX = "#777777";
 let DISTRACTOR_HEX = "#999999";
 
 const results = [];
@@ -116,9 +113,7 @@ function getNextParticipantId() {
   return "P" + Date.now().toString(36).toUpperCase() + rand;
 }
 
-// palettes.json のキー名: "<condition>_<targetCount>"
 function getPaletteKey(colorCondition, targetCount) {
-  // colorCondition: "lightness" | "hue_narrow" | "hue_wide"
   return colorCondition + "_" + targetCount;
 }
 
@@ -128,7 +123,6 @@ function getPaletteKey(colorCondition, targetCount) {
 function buildFullPlan() {
   const plan = [];
 
-  // 練習試行（config.practice_trials で定義）
   for (const pt of CFG.practice_trials) {
     plan.push({
       isPractice: true,
@@ -142,18 +136,16 @@ function buildFullPlan() {
   const colors = CFG.color_conditions;
   const counts = CFG.target_counts;
 
-  // ブロック1：時間制限あり
   let block1 = [];
   for (let i = 0; i < REP; i++) {
     for (const tc of counts) {
       for (const cc of colors) {
-        block1.push({ isPractice: false, colorCondition: cc, timeLimitOn: true,  targetCount: tc });
+        block1.push({ isPractice: false, colorCondition: cc, timeLimitOn: true, targetCount: tc });
       }
     }
   }
   plan.push(...shuffle(block1));
 
-  // ブロック2：時間制限なし
   let block2 = [];
   for (let i = 0; i < REP; i++) {
     for (const tc of counts) {
@@ -330,7 +322,6 @@ function runTrial(cond) {
   const n = GRID * GRID;
   const tc = cond.targetCount;
 
-  // グリッドインデックスをシャッフルしてターゲット位置を決める
   const indices = [...Array(n).keys()];
   for (let i = indices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -339,7 +330,6 @@ function runTrial(cond) {
   const targetIndices = indices.slice(0, tc);
   const targetSet = new Set(targetIndices);
 
-  // パレット取得
   const key = getPaletteKey(cond.colorCondition, tc);
   const palette = PALETTES[key];
   if (!palette) {
@@ -349,7 +339,6 @@ function runTrial(cond) {
     return;
   }
 
-  // ターゲット → パレット色のマッピング（順番にレベルを割り当て）
   const targetOrderMap = {};
   targetIndices.forEach((idx, i) => { targetOrderMap[idx] = palette[i]; });
 
@@ -396,7 +385,6 @@ function runTrial(cond) {
     finished = true;
     cellEls.forEach(el => el.removeEventListener("click", onClick));
 
-    // タイムアウトした未クリックターゲットを記録
     if (!cond.isPractice) {
       targetIndices.forEach(idx => {
         if (cellEls[idx].dataset.active === "1") {
@@ -416,7 +404,6 @@ function runTrial(cond) {
       });
     }
 
-    // 練習終了 → 本番1開始案内
     const practiceEnd = CFG.practice_trials.length - 1;
     if (currentTrialIndex === practiceEnd) {
       const totalBlock = CFG.reps_per_cell * CFG.color_conditions.length * CFG.target_counts.length;
@@ -438,7 +425,6 @@ function runTrial(cond) {
       return;
     }
 
-    // ブロック1終了 → 本番2開始案内
     const totalBlock = CFG.reps_per_cell * CFG.color_conditions.length * CFG.target_counts.length;
     const block1End = CFG.practice_trials.length + totalBlock - 1;
     if (currentTrialIndex === block1End) {
@@ -555,11 +541,13 @@ function showQuestionnaire() {
       device_spec: screeningData.device_spec || "",
       vision: screeningData.vision || "",
       color_vision: screeningData.color_vision || "",
-      strategy: document.getElementById("qStrategy")?.value || "",
-      count_effect: document.getElementById("qCountEffect")?.value || "",
-      improvement_feedback: document.getElementById("qImprovement")?.value || "",
-      screen_width: window.screen.width, screen_height: window.screen.height,
-      viewport_width: window.innerWidth, viewport_height: window.innerHeight,
+      strategy: document.getElementById("qStrategy") ? document.getElementById("qStrategy").value : "",
+      count_effect: document.getElementById("qCountEffect") ? document.getElementById("qCountEffect").value : "",
+      improvement_feedback: document.getElementById("qImprovement") ? document.getElementById("qImprovement").value : "",
+      screen_width: window.screen.width,
+      screen_height: window.screen.height,
+      viewport_width: window.innerWidth,
+      viewport_height: window.innerHeight,
       user_agent: navigator.userAgent,
     };
 
@@ -570,15 +558,18 @@ function showQuestionnaire() {
       form.method = "POST";
       form.action = GOOGLE_SHEET_ENDPOINT;
       form.target = "hidden_iframe";
+
       const input = document.createElement("input");
-      input.type = "hidden"; input.name = "data";
+      input.type = "hidden";
+      input.name = "data";
       input.value = JSON.stringify(payload);
       form.appendChild(input);
 
       let iframe = document.getElementById("hidden_iframe");
       if (!iframe) {
         iframe = document.createElement("iframe");
-        iframe.id = "hidden_iframe"; iframe.name = "hidden_iframe";
+        iframe.id = "hidden_iframe";
+        iframe.name = "hidden_iframe";
         iframe.style.display = "none";
         document.body.appendChild(iframe);
       }
@@ -617,9 +608,14 @@ loadConfig()
   .then(({ cfg, palettes }) => {
     CFG = cfg;
     PALETTES = palettes;
-    GOOGLE_SHEET_ENDPOINT = cfg.gas_endpoint || "";
-    BG_HEX = "#777777";          // L*=50 グレー
-    DISTRACTOR_HEX = "#999999";  // やや明るめのグレー（L*≈60相当）
+
+    // config.json に有効なURLが記載されている場合は上書き、空なら上記定数を維持
+    if (cfg && cfg.gas_endpoint && cfg.gas_endpoint.indexOf("AKfy") !== -1) {
+      GOOGLE_SHEET_ENDPOINT = cfg.gas_endpoint;
+    }
+
+    BG_HEX = "#777777";
+    DISTRACTOR_HEX = "#999999";
     showConsentScreen();
   })
   .catch(err => {
