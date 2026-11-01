@@ -1,35 +1,49 @@
 {
   "experiment_name": "Experiment_1",
-  "palette_file": "palettes.json",
-  "gas_endpoint": "https://script.google.com/macros/s/AKfycbxBZ4BMiXvrW5Y8oTDbIyF_NIL9x8xMmKw8xqJeuaS_QtnevoPaYjoOLXd8zqDXgODHQQ/exec",
-
-  "color_conditions": ["lightness", "hue_narrow", "hue_wide"],
-  "target_counts": [4, 7],
-  "time_limit_conditions": [true, false],
-
-  "reps_per_cell": 3,
-
-  "time_limit_sec": 5.0,
+  "version": "2026-11-01-username-mouse",
+  "gas_endpoint": "https://script.google.com/macros/s/AKfycbzNiTCs0icNBo0krdoFIvCoolxcrAbK7G2ukyA5e1fMsQnoOuVpMTttwEEulSMB5ivQ/exec",
+  "mode": "online",
+  "color_conditions": [
+    "lightness",
+    "hue_narrow",
+    "hue_wide",
+    "baseline"
+  ],
+  "target_counts": [
+    4,
+    7
+  ],
+  "reps_per_cell": 5,
   "fixation_sec": 1.5,
   "post_blank_sec": 0.8,
-
   "grid_size": 5,
-  "background_L": 50,
-
+  "background_hex": "#777777",
+  "distractor_hex": "#999999",
+  "baseline_hex": "#EB5C5B",
   "practice_trials": [
-    { "color_condition": "lightness",  "target_count": 7, "time_limit": true  },
-    { "color_condition": "lightness",  "target_count": 4, "time_limit": false },
-    { "color_condition": "hue_narrow", "target_count": 7, "time_limit": true  },
-    { "color_condition": "hue_wide",   "target_count": 4, "time_limit": false }
+    {
+      "color_condition": "lightness",
+      "target_count": 4
+    },
+    {
+      "color_condition": "hue_narrow",
+      "target_count": 7
+    },
+    {
+      "color_condition": "hue_wide",
+      "target_count": 4
+    },
+    {
+      "color_condition": "baseline",
+      "target_count": 7
+    }
   ],
-
-  "block_order": "time_limit_first",
-
-  "data_dir": "data",
-
-  "_notes": {
-    "reps_per_cell": "3色条件 × 2カテゴリ数 × 2時間制約 × 3回 = 36本試行",
-    "block_order": "時間制約あり→なし固定（論文§5.3.5の設計判断に基づく）",
-    "practice_trials": "4試行固定（論文§5.3.5より）"
-  }
+  "reward_yen": 500,
+  "estimated_minutes": 15,
+  "data_retention": "指導教員に確認中",
+  "contact_name": "早稲田大学人間科学部 松居研究室 羽賀琴美",
+  "contact_email": "toiro5103@akane.waseda.jp",
+  "submission_timeout_ms": 45000,
+  "min_viewport_width": 800,
+  "min_viewport_height": 620
 }
