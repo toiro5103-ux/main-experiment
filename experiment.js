@@ -58,14 +58,16 @@ function environmentOK() {
 function showConsentScreen() {
   const online = CFG.mode === 'online';
   app.innerHTML = `<div class="screen"><h1>色の優先順位に関する実験</h1>
-  <p>複数の色付きマスを、第一印象で「重要そうだ」「先に対処すべきだ」と感じる順にクリックする課題です。操作の練習、本番、事後アンケートの順に進みます。</p>
+  <p>以下の説明をご確認のうえ、ユーザー名などを入力してください。課題の操作方法は、次の画面で説明します。</p>
+  <div id="consentBox" tabindex="0" role="region" aria-label="実験の説明">
+  <p>本研究では、色の違いが選択の順序に及ぼす影響を調べます。色付きのマスを選ぶ課題を、操作の練習、本番、事後アンケートの順に行います。</p>
   <p>所要時間：${esc(CFG.estimated_minutes)}${CFG.estimated_minutes === '確認中' ? '（募集前に確定します）' : '分程度'}。${online ? '謝礼：500円。色の選び方や速さで金額が変わることはありません。' : '研究室内での対面実施用です。'}</p>
-  <p>PCのGoogle Chromeを使い、マウス（トラックパッド不可）で操作してください。夜間モード・ブルーライト軽減・色フィルターはオフにし、ブラウザを最大化してください。</p>
-  <p>対象は18歳以上で、色覚について指摘・診断を受けたことがなく、裸眼または矯正して画面の確認に支障がない方です。視力や色の見え方は自己申告で確認します。</p>
   <p>参加は任意で、いつでも中止できます。中止や通信不良の場合は担当者へご連絡ください。謝礼の取り扱いは募集時の案内に従います。</p>
   <p>クリック順序・反応時間・位置、選択肢への回答、画面サイズ、画面離脱などを記録します。回答は研究・学術発表に使用し、個人が特定される形では公表しません。クラウドワークスのユーザー名を、参加・完了の確認と謝礼支払いのために記録します。分析・公表用のデータではユーザー名を識別番号に置き換えます。</p>
   <p>中断・送信失敗に備え、このブラウザ内にも一時保存します。送信確認後は一時保存を削除します。中断時の一時保存は自動送信されません。保存期間：${esc(CFG.data_retention)}。</p>
   <p>担当：${esc(CFG.contact_name)}<br>連絡先：${esc(CFG.contact_email)}</p>
+  </div>
+  <p>PCのGoogle Chromeとマウスで操作してください。画面の色を変える機能（夜間モード等）はオフにし、ブラウザを最大化してください。</p>
   <label class="check">クラウドワークスのユーザー名 <input id="workerNameInput" class="input-field" maxlength="100" autocomplete="off" aria-describedby="workerNameHint"></label>
   <p id="workerNameHint">クラウドワークスで表示されているユーザー名を、そのまま入力してください。実名・メールアドレスを別途入力する必要はありません。</p>
   <label class="check">年齢 <input id="ageInput" class="input-field" type="text" inputmode="numeric" maxlength="12" aria-describedby="ageHint"> 歳</label>
@@ -269,6 +271,12 @@ async function init() {
     const responses=await Promise.all([fetch('config.json'),fetch('palettes.json')]);
     if(responses.some(r=>!r.ok))throw Error('設定ファイルを読み込めませんでした。');
     [CFG,PALETTES]=await Promise.all(responses.map(r=>r.json()));validateConfig(CFG,PALETTES);
+    if(new URLSearchParams(location.search).get('preview')==='consent') {
+      showConsentScreen();
+      app.insertAdjacentHTML('afterbegin','<p class="preview-notice" role="status">説明画面の確認用です。実験は開始できません。保存済みの記録は変更しません。</p>');
+      $('consentBtn').disabled=true;$('consentBtn').onclick=null;
+      return;
+    }
     let saved;try{saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');}catch(_){storageAvailable=false;}
     if(!saved){let receipt;try{receipt=JSON.parse(sessionStorage.getItem('color-sequence-receipt')||'null');}catch(_){}if(receipt&&/^DONE-[A-F0-9]{16}$/.test(receipt.code||'')){session={participant:receipt.participant,screening:{crowdworks_username:receipt.crowdworks_username||''},phase:'complete'};showThankYouScreen(receipt.code);return;}}
     if(saved?.session){
