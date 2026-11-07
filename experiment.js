@@ -67,7 +67,7 @@ function showConsentScreen() {
   <p>送信失敗に備え、回答は送信完了までこのブラウザに一時保存します。本番中に中断した場合は、やり直さず担当者へご連絡ください。課題終了後の送信だけに失敗した場合は、課題をやり直さず、同じ回答を再送できます。</p>
   <p>担当：${esc(CFG.contact_name)}<br>連絡先：${esc(CFG.contact_email)}</p>
   </div>
-  <p>PCのGoogle Chromeとマウスで操作してください。画面の色を変える機能（夜間モード等）はオフにし、ブラウザを最大化してください。</p>
+  <p>PCとマウスで操作してください。ブラウザはGoogle Chromeを推奨します。画面の色を変える機能（夜間モード等）はオフにし、ブラウザを最大化してください。</p>
   <label class="check">クラウドワークスのユーザー名 <input id="workerNameInput" class="input-field" maxlength="100" autocomplete="off" aria-describedby="workerNameHint"></label>
   <p id="workerNameHint">クラウドワークスで表示されているユーザー名を、そのまま入力してください。実名・メールアドレスを別途入力する必要はありません。</p>
   <label class="check">年齢 <input id="ageInput" class="input-field" type="text" inputmode="numeric" maxlength="12" aria-describedby="ageHint"> 歳</label>
@@ -81,8 +81,8 @@ function showConsentScreen() {
   $('consentBtn').onclick = () => {
     const workerName = $('workerNameInput').value.trim(), age = parseAge($('ageInput').value);
     const error = msg => $('consentError').textContent = msg;
-    if (!validWorkerName(workerName)) return error('クラウドワークスのユーザー名を100文字以内で入力してください。改行などの制御文字は使用できません。');
-    if (!Number.isInteger(age) || age < 18 || age > 120) return error('年齢を数字で入力してください（例：22、２２）。対象は18歳以上です。');
+    if (!validWorkerName(workerName)) return error('クラウドワークスのユーザー名を100文字以内で入力してください。');
+    if (!Number.isInteger(age) || age < 18 || age > 120) return error('年齢を数字で入力してください。対象は18歳以上です。');
     $('ageInput').value = String(age);
     if (!$('eligibilityCheck').checked) return error('募集ページの参加条件をご確認ください。条件を満たす場合のみ、確認欄にチェックを入れてください。');
     if (!$('agreeCheck').checked) return error('同意いただける場合はチェックを入れてください。');
