@@ -245,7 +245,19 @@ async function submitPayload() {
 }
 function showThankYouScreen(code) {
   progressEl.textContent='完了';
-  app.innerHTML=`<div class="screen"><h1>保存が完了しました</h1><p>実験へのご協力ありがとうございました。</p><p>ユーザー名：${esc(participantName())}</p><p>完了コード：<strong style="user-select:all">${esc(code)}</strong></p><p>このコードをクラウドワークスのメッセージで担当者へ送り、納品手続きを行ってください。</p></div>`;
+  const formURL = new URL('https://docs.google.com/forms/d/e/1FAIpQLSdo0VK1DWpp0AyHKUmqwcTozxZ3k5YZ5kxbM8kMszw9jVAhow/viewform');
+  formURL.searchParams.set('usp', 'pp_url');
+  formURL.searchParams.set('entry.2083742657', participantName());
+  app.innerHTML=`<div class="screen"><h1>保存が完了しました</h1>
+  <p>実験データの保存が完了しました。以下の完了コードを控えてください。</p>
+  <p>ユーザー名：${esc(participantName())}</p>
+  <p>完了コード：<strong style="user-select:all">${esc(code)}</strong></p>
+  <h2>続いて、色の印象に関するアンケートへ</h2>
+  <p>下のボタンから、同じモニターでアンケートに回答してください（約5分）。別のタブで開きます。ユーザー名は入力済みですので、ご確認ください。</p>
+  <p><a href="${esc(formURL.href)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:8px 0;padding:12px 28px;font-size:16px;border-radius:6px;background:#2b7de9;color:#fff;text-decoration:none">アンケートへ進む</a></p>
+  <p>アンケートを送信した後、この完了コードをクラウドワークスのメッセージで担当者へ送り、納品手続きを行ってください。</p>
+  <p>すでにアンケートに回答済みの方は、再回答の必要はありません。追加アンケートを任意としてご案内した方は、回答の有無によって謝礼が変わることはありません。</p>
+  </div>`;
 }
 function showOfflineSave() {
   app.innerHTML='<div class="screen"><h1>担当者にお知らせください</h1><p>回答をこの端末に保存します。オンライン送信やクラウドワークス用の完了コード発行は行いません。</p><button id="backupBtn">回答データを保存する</button><p>担当者はダウンロードしたファイルを確認してから、下のボタンを押してください。</p><button id="offlineDoneBtn">ファイルの保存を確認した（担当者用）</button></div>';
