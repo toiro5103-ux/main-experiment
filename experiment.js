@@ -255,6 +255,7 @@ function showThankYouScreen(code) {
   <h2>続いて、色の印象に関するアンケートへ</h2>
   <p>下のボタンから、同じモニターでアンケートに回答してください（約5分）。別のタブで開きます。ユーザー名は入力済みですので、ご確認ください。</p>
   <p><a href="${esc(formURL.href)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:8px 0;padding:12px 28px;font-size:16px;border-radius:6px;background:#2b7de9;color:#fff;text-decoration:none">アンケートへ進む</a></p>
+  <p>以前のメッセージで、②のアンケートURLを後からご案内するとお伝えした方も、担当者からの返信を待たずに、上のボタンからお進みください。</p>
   <p>アンケートを送信した後、この完了コードをクラウドワークスのメッセージで担当者へ送り、納品手続きを行ってください。</p>
   <p>すでにアンケートに回答済みの方は、再回答の必要はありません。追加アンケートを任意としてご案内した方は、回答の有無によって謝礼が変わることはありません。</p>
   </div>`;
